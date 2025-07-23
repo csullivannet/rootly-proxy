@@ -1,0 +1,138 @@
+version: '3'
+
+tasks:
+  test:
+    desc: Run all tests
+    cmds:
+      - go test ./...
+
+  test-ready:
+    desc: Check that the app server is ready.
+    cmds:
+      - |
+        echo "Waiting for app to be ready..."
+        MAX_ATTEMPTS=30
+        ATTEMPT=0
+        while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            if curl -s http://localhost:8444/ready | grep -q "Service is ready"; then
+                echo "Service is ready!"
+                break
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - Service not ready yet, waiting..."
+            sleep 1
+        done
+
+        if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+            echo "Service failed to become ready after $MAX_ATTEMPTS attempts"
+            exit 1
+        fi
+    silent: true
+
+  test-integration-verbose:
+    desc: Manual integration tests with more output from curl
+    cmds:
+      - task: test-ready
+      - |
+        echo -e "\nTesting redirect"
+        curl --no-progress-meter -I -H "Host: status.acme.com" http://localhost:8080 | grep -q "302 Found"
+        echo "✓ Redirect working"
+
+        echo -e "\nTesting known hostname status.acme.com..."
+        curl -vik --no-progress-meter --resolve status.acme.com:8443:127.0.0.1 https://status.acme.com:8443 \
+          | grep -q "ACME Status Page"
+        echo "✓ ACME Status Page returned"
+
+        echo -e "\nTesting known hostname status.example.com..."
+        curl -vik --no-progress-meter --resolve status.example.com:8443:127.0.0.1 https://status.example.com:8443 \
+          | grep -q "Example Status Page"
+        echo "✓ Example Status Page returned"
+
+        echo -e "\nTesting unknown hostname (expecting 404)..."
+        curl -vik --no-progress-meter --resolve status.unknown.com:8443:127.0.0.1 https://status.unknown.com:8443 \
+          | grep -q "404"
+        echo "✓ 404 error returned as expected"
+
+        echo -e "\nAll tests passed!"
+    silent: false
+
+  test-integration:
+    desc: Manual integration tests with Docker and Pebble
+    cmds:
+      - task: test-ready
+      - |
+        echo -e "\nTesting redirect"
+        curl -s -I -H "Host: status.acme.com" http://localhost:8080 | grep -q "302 Found"
+        echo "✓ Redirect working"
+
+        echo -e "\nTesting known hostname status.acme.com..."
+        curl -sik --resolve status.acme.com:8443:127.0.0.1 https://status.acme.com:8443 \
+          | grep -q "ACME Status Page"
+        echo "✓ ACME Status Page returned"
+
+        echo -e "\nTesting known hostname status.example.com..."
+        curl -sik --resolve status.example.com:8443:127.0.0.1 https://status.example.com:8443 \
+          | grep -q "Example Status Page"
+        echo "✓ Example Status Page returned"
+
+        echo -e "\nTesting unknown hostname (expecting 404)..."
+        curl -sik --resolve status.unknown.com:8443:127.0.0.1 https://status.unknown.com:8443 \
+          | grep -q "404"
+        echo "✓ 404 error returned as expected"
+
+        echo -e "\nAll tests passed!"
+    silent: true
+
+  db-up:
+    desc: Bring up the database
+    cmds:
+      - docker-compose up -d postgres
+
+  docker-build:
+    desc: Build Docker image
+    cmds:
+      - docker build -t rootly-proxy:latest .
+
+  docker-up:
+    desc: Start all Docker services including app (rebuilds if code changed)
+    cmds:
+      - task: docker-build
+      - docker-compose up -d
+
+  docker-down:
+    desc: Stop Docker services
+    cmds:
+      - docker-compose down
+
+  docker-logs:
+    desc: Show Docker logs
+    cmds:
+      - docker-compose logs -f
+
+  build:
+    desc: Build the application
+    cmds:
+      - go build -o rootly-proxy ./cmd/server
+
+  run:
+    desc: Run the application locally
+    deps: [docker-up]
+    cmds:
+      - go run ./cmd/server/main.go
+
+  fmt:
+    desc: Format Go code
+    cmds:
+      - go fmt ./...
+
+  vet:
+    desc: Vet Go code
+    cmds:
+      - go vet ./...
+
+  clean:
+    desc: Clean build artifacts and Docker volumes
+    cmds:
+      - rm -f rootly-proxy
+      - docker-compose down -v
+      - docker system prune -f

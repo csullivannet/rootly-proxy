@@ -24,9 +24,19 @@ profile.cov
 go.work
 go.work.sum
 
-# env file
+# env
 .env
+.direnv
 
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Claude
+.claude/settings.local.json
+
+# Binary
+rootly-proxy
+
+# Certs cache
+certs
