@@ -13,6 +13,7 @@ This project implements a minimal custom proxy that allows customers to CNAME th
 This project uses Nix flakes for reproducible development environments. Make sure you have:
 - Nix with flakes enabled
 - Direnv (optional, for automatic environment loading, otherwise you need `nix develop`)
+- A docker host, either locally or that you can configure your docker client to connect to.
 
 
 #### Nix
@@ -39,3 +40,8 @@ The test data includes two customers, acme.com and example.com.
 
 TLS certs are provided with Pebble. Otherwise the server uses a self-signed cert for non-proxied paths.
 
+## Viewing connections
+
+To watch the proxy serve certs and proxy to the backend:
+
+Run `task docker-up && task docker-logs`. In a new terminal run `task test-integration-verbose`.
